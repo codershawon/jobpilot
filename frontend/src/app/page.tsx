@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { PipelineResponse, JobItem, CVProfile } from "@/types/job";
-import { API_BASE_URL } from "@/config/api"; // <--- সেন্ট্রাল ডাইনামিক ইউআরএল
+import { API_BASE_URL } from "@/config/api";
 import Header from "@/components/Header";
 import ProfileSummary from "@/components/ProfileSummary";
 import JobGrid from "@/components/JobGrid";
@@ -12,11 +12,14 @@ import CoverLetterModal from "@/components/CoverLetterModal";
 import FilterBar from "@/components/FilterBar";
 import SocialSearchLinks from "@/components/SocialSearchLinks";
 import ApplyStudioModal from "@/components/ApplyStudioModal";
+import Pagination from "@/components/Pagination";
 
 const STORAGE_KEY_PROFILE = "jobpilot_saved_profile";
 const STORAGE_KEY_JOBS = "jobpilot_saved_jobs";
 const STORAGE_KEY_APPLIED = "jobpilot_applied_jobs";
 const STORAGE_KEY_SYNC_TIME = "jobpilot_last_synced";
+
+const ITEMS_PER_PAGE = 6; // প্রতি পেজে ৬টি করে জব
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
@@ -32,7 +35,8 @@ export default function DashboardPage() {
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [selectedJobForStudio, setSelectedJobForStudio] = useState<JobItem | null>(null);
 
-  // লোকাল স্টোরেজ থেকে রিলোড ডেটা পড়া
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   useEffect(() => {
     try {
       const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
@@ -40,7 +44,6 @@ export default function DashboardPage() {
       const savedApplied = localStorage.getItem(STORAGE_KEY_APPLIED);
       const savedTime = localStorage.getItem(STORAGE_KEY_SYNC_TIME);
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedProfile) setProfile(JSON.parse(savedProfile));
       if (savedJobs) setJobs(JSON.parse(savedJobs));
       if (savedApplied) setAppliedJobs(JSON.parse(savedApplied));
@@ -50,7 +53,6 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // জেলা তালিকা ফেচ করা
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/districts`)
       .then((res) => res.json())
@@ -62,7 +64,11 @@ export default function DashboardPage() {
       .catch((err) => console.error("District fetch error:", err));
   }, []);
 
-  // রেজুমে আপলোড
+  // ট্যাব, সার্চ বা জেলা পরিবর্তন হলে পেজ নাম্বার ১-এ রিসেট
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTab, selectedDistrict, searchKeyword]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -84,6 +90,7 @@ export default function DashboardPage() {
       setProfile(result.profile);
       setJobs(result.matched_jobs);
       setLastSynced(timeStr);
+      setCurrentPage(1);
 
       localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(result.profile));
       localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(result.matched_jobs));
@@ -96,7 +103,6 @@ export default function DashboardPage() {
     }
   };
 
-  // ফ্রেশ জব রিফ্রেশ
   const handleRefreshJobs = async () => {
     if (!profile) return;
 
@@ -136,6 +142,7 @@ export default function DashboardPage() {
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setJobs(matchData.matched_jobs);
       setLastSynced(timeStr);
+      setCurrentPage(1);
 
       localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(matchData.matched_jobs));
       localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
@@ -155,32 +162,46 @@ export default function DashboardPage() {
     });
   };
 
-  const filteredJobs = jobs.filter((job) => {
-    let matchesTab = true;
-    if (selectedTab === "APPLIED") matchesTab = !!appliedJobs[job.id];
-    else if (selectedTab === "REMOTE") matchesTab = job.is_remote;
-    else if (selectedTab === "LOCAL") matchesTab = !job.is_remote;
-    else if (selectedTab === "HIGH_MATCH") matchesTab = (job.match_score || 0) >= 50;
-    else if (selectedTab !== "ALL") matchesTab = job.source.toUpperCase() === selectedTab;
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      let matchesTab = true;
+      if (selectedTab === "APPLIED") matchesTab = !!appliedJobs[job.id];
+      else if (selectedTab === "REMOTE") matchesTab = job.is_remote;
+      else if (selectedTab === "LOCAL") matchesTab = !job.is_remote;
+      else if (selectedTab === "HIGH_MATCH") matchesTab = (job.match_score || 0) >= 50;
+      else if (selectedTab !== "ALL") matchesTab = job.source.toUpperCase() === selectedTab;
 
-    const kw = searchKeyword.toLowerCase();
-    const matchesKeyword =
-      !searchKeyword ||
-      job.title.toLowerCase().includes(kw) ||
-      job.company.toLowerCase().includes(kw) ||
-      (job.tags && job.tags.some((t) => t.toLowerCase().includes(kw)));
+      const kw = searchKeyword.toLowerCase();
+      const matchesKeyword =
+        !searchKeyword ||
+        job.title.toLowerCase().includes(kw) ||
+        job.company.toLowerCase().includes(kw) ||
+        (job.tags && job.tags.some((t) => t.toLowerCase().includes(kw)));
 
-    const matchesDistrict =
-      selectedDistrict === "ALL" ||
-      (job.district && job.district.toLowerCase() === selectedDistrict.toLowerCase()) ||
-      (job.location && job.location.toLowerCase().includes(selectedDistrict.toLowerCase()));
+      const matchesDistrict =
+        selectedDistrict === "ALL" ||
+        (job.district && job.district.toLowerCase() === selectedDistrict.toLowerCase()) ||
+        (job.location && job.location.toLowerCase().includes(selectedDistrict.toLowerCase()));
 
-    return matchesTab && matchesKeyword && matchesDistrict;
-  });
+      return matchesTab && matchesKeyword && matchesDistrict;
+    });
+  }, [jobs, selectedTab, appliedJobs, searchKeyword, selectedDistrict]);
+
+  // পেজিনেশন স্লাইস ও পেইজ ট্রানজিশন
+  const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE) || 1;
+  const paginatedJobs = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredJobs, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 320, behavior: "smooth" });
+  };
 
   return (
-    <div className="min-h-screen bg-[#090D16] text-slate-100 p-6 md:p-12 font-sans selection:bg-cyan-500 selection:text-slate-950">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#090D16] text-slate-100 p-4 sm:p-6 md:p-12 font-sans selection:bg-cyan-500 selection:text-slate-950 overflow-x-hidden w-full">
+      <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 w-full">
         <Header
           loading={loading}
           refreshing={refreshing}
@@ -190,15 +211,15 @@ export default function DashboardPage() {
           onRefreshJobs={handleRefreshJobs}
         />
 
-        <main className="space-y-8">
+        <main className="space-y-6 md:space-y-8">
           {loading && <LoadingState />}
 
           {!loading && !profile && (
-            <div className="rounded-3xl border border-dashed border-cyan-950/80 bg-slate-900/20 p-20 text-center flex flex-col items-center justify-center">
+            <div className="rounded-3xl border border-dashed border-cyan-950/80 bg-slate-900/20 p-12 md:p-20 text-center flex flex-col items-center justify-center">
               <div className="p-4 rounded-2xl bg-slate-950 border border-cyan-950 text-cyan-400 mb-4 shadow-sm">
-                <BsFileEarmarkTextFill className="w-10 h-10" />
+                <BsFileEarmarkTextFill className="w-8 h-8 md:w-10 md:h-10" />
               </div>
-              <h3 className="text-xl font-bold text-slate-200">No Resume Uploaded</h3>
+              <h3 className="text-lg md:text-xl font-bold text-slate-200">No Resume Uploaded</h3>
               <p className="text-slate-400 text-xs md:text-sm max-w-sm mt-2 leading-relaxed">
                 Upload your PDF or DOCX resume once. It will stay saved so you can check fresh vacancies anytime with a single click.
               </p>
@@ -220,17 +241,29 @@ export default function DashboardPage() {
                   searchKeyword={searchKeyword}
                   onSearchKeywordChange={setSearchKeyword}
                 />
+
                 <SocialSearchLinks
                   keyword={searchKeyword || profile.preferred_job_titles?.[0] || "React Developer"}
                   location={selectedDistrict !== "ALL" ? selectedDistrict : profile.district || "Bangladesh"}
                 />
+
+                {/* জব কার্ড গ্রিড */}
                 <JobGrid
-                  jobs={filteredJobs}
+                  jobs={paginatedJobs}
                   profile={profile}
                   appliedJobs={appliedJobs}
                   onToggleApply={toggleApplied}
                   onOpenCoverLetter={(job) => setSelectedJobForModal(job)}
                   onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}
+                />
+
+                {/* রিইউজেবল পেজিনেশন কম্পোনেন্ট */}
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredJobs.length}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                  onPageChange={handlePageChange}
                 />
               </div>
             </>
@@ -242,7 +275,7 @@ export default function DashboardPage() {
         job={selectedJobForModal}
         onClose={() => setSelectedJobForModal(null)}
       />
-      
+
       <ApplyStudioModal
         job={selectedJobForStudio}
         profile={profile}
