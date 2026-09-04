@@ -2,7 +2,7 @@
 
 import React from "react";
 import { BsCloudArrowUpFill, BsArrowRepeat } from "react-icons/bs";
-import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { HiSparkles } from "react-icons/hi2";
 import { TbBrain } from "react-icons/tb";
 
@@ -60,23 +60,23 @@ export default function Header({
           </button>
         )}
         <div className="flex items-center ml-2">
-        <Show when="signed-out">
-          <SignInButton mode="modal" forceRedirectUrl="/">
-            <button className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-500/50 font-semibold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl transition-all active:scale-95">
-              Sign In
-            </button>
-          </SignInButton>
-        </Show>
+        <SignedOut>
+        <SignInButton mode="modal">
+          <button className="px-4 py-2 bg-blue-600 text-white rounded">
+            Sign In
+          </button>
+        </SignInButton>
+        
+        <SignUpButton mode="modal">
+          <button className="px-4 py-2 border rounded">
+            Sign Up
+          </button>
+        </SignUpButton>
+      </SignedOut>
 
-        <Show when="signed-in">
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: "w-9 h-9 border border-cyan-500/50 rounded-xl",
-              },
-            }}
-          />
-        </Show>
+      <SignedIn>
+        <UserButton />
+      </SignedIn>
       </div>
 
         <label className="relative group cursor-pointer">
