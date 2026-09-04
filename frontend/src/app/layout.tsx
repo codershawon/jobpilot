@@ -16,7 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      proxyUrl="https://jobpilot-plum-omega.vercel.app/__clerk"
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/">
       <html lang="en">
         <body className={`${inter.className} bg-[#090D16] text-slate-100 antialiased`}>
           {children}
