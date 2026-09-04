@@ -5,8 +5,11 @@ from app.config import settings
 DATA_FILE = os.path.join(settings.DATA_DIR, "saved_pipeline.json")
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 
 from app.models import (
+    CVProfile, 
+    JobItem,
     CVParseResponse,
     JobSearchQuery,
     JobSearchResponse,
