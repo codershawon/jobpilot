@@ -2,7 +2,7 @@
 
 import React from "react";
 import { BsCloudArrowUpFill, BsArrowRepeat } from "react-icons/bs";
-import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 import { HiSparkles } from "react-icons/hi2";
 import { TbBrain } from "react-icons/tb";
 
@@ -16,6 +16,7 @@ interface HeaderProps {
 }
 
 export default function Header({
+
   loading,
   refreshing,
   hasProfile,
@@ -23,6 +24,7 @@ export default function Header({
   onFileUpload,
   onRefreshJobs,
 }: HeaderProps) {
+  const { isSignedIn, isLoaded } = useUser();
   return (
     <header className="border-b border-cyan-950/60 pb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
       <div>
@@ -59,24 +61,26 @@ export default function Header({
             <span>{refreshing ? "Checking Vacancies..." : "Check New Vacancies"}</span>
           </button>
         )}
-        <div className="flex items-center ml-2">
-        <SignedOut>
-        <SignInButton mode="modal">
-          <button className="px-4 py-2 bg-blue-600 text-white rounded">
-            Sign In
-          </button>
-        </SignInButton>
-        
-        <SignUpButton mode="modal">
-          <button className="px-4 py-2 border rounded">
-            Sign Up
-          </button>
-        </SignUpButton>
-      </SignedOut>
-
-      <SignedIn>
-        <UserButton />
-      </SignedIn>
+        <div className="flex items-center ml-2 gap-2">
+        {!isLoaded ? (
+          // লোড হওয়ার সময় বাটন বা স্পিনার দেখাতে পারেন
+          <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+        ) : !isSignedIn ? (
+          <>
+            <SignInButton mode="modal">
+              <button className="px-4 py-2 bg-blue-600 text-white rounded">
+                Sign In
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="px-4 py-2 border rounded">
+                Sign Up
+              </button>
+            </SignUpButton>
+          </>
+        ) : (
+          <UserButton />
+        )}
       </div>
 
         <label className="relative group cursor-pointer">
