@@ -44,6 +44,7 @@ export default function DashboardPage() {
       const savedApplied = localStorage.getItem(STORAGE_KEY_APPLIED);
       const savedTime = localStorage.getItem(STORAGE_KEY_SYNC_TIME);
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedProfile) setProfile(JSON.parse(savedProfile));
       if (savedJobs) setJobs(JSON.parse(savedJobs));
       if (savedApplied) setAppliedJobs(JSON.parse(savedApplied));
@@ -66,6 +67,7 @@ export default function DashboardPage() {
 
   // ট্যাব, সার্চ বা জেলা পরিবর্তন হলে পেজ নাম্বার ১-এ রিসেট
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [selectedTab, selectedDistrict, searchKeyword]);
 

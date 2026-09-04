@@ -2,6 +2,7 @@
 
 import React from "react";
 import { BsCloudArrowUpFill, BsArrowRepeat } from "react-icons/bs";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { HiSparkles } from "react-icons/hi2";
 import { TbBrain } from "react-icons/tb";
 
@@ -58,6 +59,25 @@ export default function Header({
             <span>{refreshing ? "Checking Vacancies..." : "Check New Vacancies"}</span>
           </button>
         )}
+        <div className="flex items-center ml-2">
+        <Show when="signed-out">
+          <SignInButton mode="modal" forceRedirectUrl="/">
+            <button className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-500/50 font-semibold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl transition-all active:scale-95">
+              Sign In
+            </button>
+          </SignInButton>
+        </Show>
+
+        <Show when="signed-in">
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-9 h-9 border border-cyan-500/50 rounded-xl",
+              },
+            }}
+          />
+        </Show>
+      </div>
 
         <label className="relative group cursor-pointer">
           <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500 to-cyan-300 rounded-xl blur opacity-25 group-hover:opacity-60 transition duration-300"></div>
