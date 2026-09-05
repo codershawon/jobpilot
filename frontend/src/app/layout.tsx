@@ -17,9 +17,10 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider
-      proxyUrl="https://jobpilot-plum-omega.vercel.app/__clerk"
+      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL || undefined}
       signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/">
+      signUpFallbackRedirectUrl="/"
+    >
       <html lang="en">
         <body className={`${inter.className} bg-[#090D16] text-slate-100 antialiased`}>
           {children}
