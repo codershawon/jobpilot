@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useUser } from "@clerk/nextjs";
 import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { PipelineResponse, JobItem, CVProfile } from "@/types/job";
 import { API_BASE_URL } from "@/config/api";
+import { useJobPilotApi } from "@/hooks/useJobPilotApi";
+
 import Header from "@/components/Header";
 import ProfileSummary from "@/components/ProfileSummary";
 import JobGrid from "@/components/JobGrid";
@@ -19,9 +22,12 @@ const STORAGE_KEY_JOBS = "jobpilot_saved_jobs";
 const STORAGE_KEY_APPLIED = "jobpilot_applied_jobs";
 const STORAGE_KEY_SYNC_TIME = "jobpilot_last_synced";
 
-const ITEMS_PER_PAGE = 6; // প্রতি পেজে ৬টি করে জব
+const ITEMS_PER_PAGE = 6;
 
 export default function DashboardPage() {
+  const { isSignedIn, isLoaded } = useUser();
+  const { fetchSavedPipeline, savePipeline } = useJobPilotApi();
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<CVProfile | null>(null);
@@ -34,26 +40,43 @@ export default function DashboardPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("ALL");
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [selectedJobForStudio, setSelectedJobForStudio] = useState<JobItem | null>(null);
-
   const [currentPage, setCurrentPage] = useState<number>(1);
 
+ // ১. ইউজার ডেটা লোড (Database Priority + LocalStorage Fallback)
   useEffect(() => {
-    try {
-      const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
-      const savedJobs = localStorage.getItem(STORAGE_KEY_JOBS);
-      const savedApplied = localStorage.getItem(STORAGE_KEY_APPLIED);
-      const savedTime = localStorage.getItem(STORAGE_KEY_SYNC_TIME);
+    if (!isLoaded) return;
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (savedProfile) setProfile(JSON.parse(savedProfile));
-      if (savedJobs) setJobs(JSON.parse(savedJobs));
-      if (savedApplied) setAppliedJobs(JSON.parse(savedApplied));
-      if (savedTime) setLastSynced(savedTime);
-    } catch (e) {
-      console.error("Local storage load error:", e);
+    if (isSignedIn) {
+      fetchSavedPipeline()
+        .then((data) => {
+          if (data && data.profile) {
+            setProfile(data.profile);
+            setJobs(data.matched_jobs || []);
+            setLastSynced(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+          }
+        })
+        .catch((err) => {
+          console.log("Database fetch info:", err);
+        });
+    } else {
+      try {
+        const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
+        const savedJobs = localStorage.getItem(STORAGE_KEY_JOBS);
+        const savedApplied = localStorage.getItem(STORAGE_KEY_APPLIED);
+        const savedTime = localStorage.getItem(STORAGE_KEY_SYNC_TIME);
+
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (savedProfile) setProfile(JSON.parse(savedProfile));
+        if (savedJobs) setJobs(JSON.parse(savedJobs));
+        if (savedApplied) setAppliedJobs(JSON.parse(savedApplied));
+        if (savedTime) setLastSynced(savedTime);
+      } catch (e) {
+        console.error("Local storage load error:", e);
+      }
     }
-  }, []);
+  }, [isSignedIn, isLoaded, fetchSavedPipeline]);
 
+  // ২. জেলা তালিকা লোড
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/districts`)
       .then((res) => res.json())
@@ -65,46 +88,66 @@ export default function DashboardPage() {
       .catch((err) => console.error("District fetch error:", err));
   }, []);
 
-  // ট্যাব, সার্চ বা জেলা পরিবর্তন হলে পেজ নাম্বার ১-এ রিসেট
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [selectedTab, selectedDistrict, searchKeyword]);
 
+  // ৩. রেজুমে আপলোড ও পাইপলাইন রান
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
+  setLoading(true);
+  const formData = new FormData();
+  formData.append("file", file);
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/pipeline/run`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Pipeline execution failed");
-      const result: PipelineResponse = await res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/pipeline/run`, {
+      method: "POST",
+      body: formData,
+    });
 
-      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-      setProfile(result.profile);
-      setJobs(result.matched_jobs);
-      setLastSynced(timeStr);
-      setCurrentPage(1);
-
-      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(result.profile));
-      localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(result.matched_jobs));
-      localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
-    } catch (err) {
-      alert("Error parsing resume and aggregating jobs. Ensure backend is running.");
-      console.error(err);
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || "Pipeline execution failed");
     }
-  };
 
+    const result: PipelineResponse = await res.json();
+    const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    // স্টেট আপডেট
+    setProfile(result.profile);
+    setJobs(result.matched_jobs);
+    setLastSynced(timeStr);
+    setCurrentPage(1);
+
+    // ১. ইউজার সাইন-ইন থাকলে সরাসরি ডেটাবেজে ব্যাকআপ
+    if (isSignedIn) {
+      try {
+        await savePipeline(result);
+      } catch (dbErr) {
+        console.error("Database save error:", dbErr);
+      }
+    }
+
+    // ২. লোকালস্টোরেজ ব্যাকআপ (অফলাইন বা গেস্ট ইউজারের জন্য)
+    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(result.profile));
+    localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(result.matched_jobs));
+    localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
+
+  } catch (err: unknown) {
+    const errorMessage = typeof err === "object" && err !== null && "message" in err ? err.message : "Error parsing resume and aggregating jobs. Ensure backend is running.";
+    alert(errorMessage);
+    console.error(err);
+  } finally {
+    setLoading(false);
+    // ফাইল ইনপুট রিসেট করা (একই ফাইল আবার আপলোড করার সুবিধার জন্য)
+    e.target.value = "";
+  }
+};
+
+  // ৪. জব রিফ্রেশ
   const handleRefreshJobs = async () => {
     if (!profile) return;
 
@@ -114,7 +157,7 @@ export default function DashboardPage() {
         ? profile.preferred_job_titles
         : profile.skills.slice(0, 4);
 
-      const res = await fetch(`${API_BASE_URL}/api/jobs/search`, {
+      const res = await fetch(`${API_BASE_URL}/api/pipeline/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -128,7 +171,7 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Job search failed");
       const searchData = await res.json();
 
-      const matchRes = await fetch(`${API_BASE_URL}/api/jobs/match`, {
+      const matchRes = await fetch(`${API_BASE_URL}/api/pipeline/match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,6 +188,15 @@ export default function DashboardPage() {
       setJobs(matchData.matched_jobs);
       setLastSynced(timeStr);
       setCurrentPage(1);
+
+      // আপডেট করা জব লিস্ট ডেটাবেজে সেভ
+      if (isSignedIn) {
+        savePipeline({
+          profile: profile,
+          total_found: matchData.matched_jobs.length,
+          matched_jobs: matchData.matched_jobs,
+        }).catch((err) => console.error("Auto-sync to DB error:", err));
+      }
 
       localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(matchData.matched_jobs));
       localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
@@ -189,7 +241,6 @@ export default function DashboardPage() {
     });
   }, [jobs, selectedTab, appliedJobs, searchKeyword, selectedDistrict]);
 
-  // পেজিনেশন স্লাইস ও পেইজ ট্রানজিশন
   const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE) || 1;
   const paginatedJobs = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -223,7 +274,7 @@ export default function DashboardPage() {
               </div>
               <h3 className="text-lg md:text-xl font-bold text-slate-200">No Resume Uploaded</h3>
               <p className="text-slate-400 text-xs md:text-sm max-w-sm mt-2 leading-relaxed">
-                Upload your PDF or DOCX resume once. It will stay saved so you can check fresh vacancies anytime with a single click.
+                Upload your PDF or DOCX resume once. It will stay saved securely to your account so you can check fresh vacancies anytime with a single click.
               </p>
             </div>
           )}
@@ -249,7 +300,6 @@ export default function DashboardPage() {
                   location={selectedDistrict !== "ALL" ? selectedDistrict : profile.district || "Bangladesh"}
                 />
 
-                {/* জব কার্ড গ্রিড */}
                 <JobGrid
                   jobs={paginatedJobs}
                   profile={profile}
@@ -259,7 +309,6 @@ export default function DashboardPage() {
                   onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}
                 />
 
-                {/* রিইউজেবল পেজিনেশন কম্পোনেন্ট */}
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
