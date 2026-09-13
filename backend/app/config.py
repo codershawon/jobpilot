@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # ---- Database Settings ----
+    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
+
     # LLM Settings
     LLM_BASE_URL: str = "https://api.oxyy.ai/v1"
     LLM_API_KEY: str = ""
@@ -13,7 +16,7 @@ class Settings(BaseSettings):
 
     # Ultimate High-Accuracy Priority Fallback Chain
     MODEL_FALLBACK_CHAIN: List[str] = [
-        # --- ১. ফ্ল্যাগশিপ টপ-টিয়ার মডেলস (বেস্ট কোয়ালিটি ও পার্সিং) ---
+        # --- ১. ফ্ল্যাগশিপ টপ-টিয়ার মডেলস (বেস্ট কোয়ালিটি ও পার্সিং) ---
         "claude-sonnet-4.6",
         "claude-sonnet-4.5",
         "gpt-5.4",
@@ -50,7 +53,7 @@ class Settings(BaseSettings):
         "qwen/qwen-2.5-coder-32b-instruct:free"
     ]
 
-    # ---- 3. Bangladesh Geo API (ডায়নামিক ৬৪ জেলা) ----
+    # ---- 3. Bangladesh Geo API (ডায়নামিক ৬৪ জেলা) ----
     BD_DISTRICTS_API_URL: str = "https://bdapis.vercel.app/geo/v2.0/districts"
 
     # App Settings
