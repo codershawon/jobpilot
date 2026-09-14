@@ -1,9 +1,9 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine
 from app.api.v1.pipeline import router as pipeline_router
 
 
@@ -14,9 +14,7 @@ redoc_url = "/redoc" if settings.APP_ENV != "production" else None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # স্টার্টআপে ডেটাবেজ টেবিল চেক/তৈরি
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # স্টার্টআপ চেক
     yield
 
 
@@ -25,14 +23,14 @@ app = FastAPI(
     title="JobPilot API",
     docs_url=docs_url,
     redoc_url=redoc_url,
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
 # ৩. নির্দিষ্ট অরিজিনের জন্য CORS লক করা
 origins = [
     "https://jobpilot-plum-omega.vercel.app",
-    "http://localhost:3000",  # লোকাল টেস্টিংয়ের জন্য
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
