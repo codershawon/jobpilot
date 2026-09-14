@@ -2,48 +2,52 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.core.database import engine
-from app.db.models import Base
-from app.api.v1.districts import router as districts_router
-from app.api.v1.cv import router as cv_router
+from app.config import settings
+from app.core.database import engine, Base
 from app.api.v1.pipeline import router as pipeline_router
-from app.api.v1.agent import router as agent_router
+
+
+# ১. প্রোডাকশনে /docs ও /redoc বন্ধ রাখার কনফিগ
+docs_url = "/docs" if settings.APP_ENV != "production" else None
+redoc_url = "/redoc" if settings.APP_ENV != "production" else None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # স্টার্টআপে ডেটাবেজ টেবিল চেক/তৈরি
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
 
+
+# ২. FastAPI ইনিশিয়ালাইজেশন
 app = FastAPI(
     title="JobPilot API",
-    description="Autonomous Profile Parser & District/Worldwide Job Matcher",
-    version="1.0.0",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
     lifespan=lifespan
 )
 
+
+# ৩. নির্দিষ্ট অরিজিনের জন্য CORS লক করা
+origins = [
+    "https://jobpilot-plum-omega.vercel.app",
+    "http://localhost:3000",  # লোকাল টেস্টিংয়ের জন্য
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# এপিআই রাউটার মাউন্ট করা
-app.include_router(districts_router, prefix="/api")
-app.include_router(cv_router, prefix="/api")
+
+# ৪. রাউটার সংযুক্ত করা
 app.include_router(pipeline_router, prefix="/api")
-app.include_router(agent_router, prefix="/api")
+
 
 @app.get("/")
-def root():
-    return {
-        "app": "JobPilot API",
-        "status": "running",
-        "docs_url": "/docs"
-    }
-
-@app.get("/api/health")
-def health_check():
-    return {"status": "ok"}
+async def root():
+    return {"status": "healthy", "service": "JobPilot Backend"}
