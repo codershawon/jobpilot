@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useUser } from "@clerk/nextjs";
-import { BsFileEarmarkTextFill } from "react-icons/bs";
 import { PipelineResponse, JobItem, CVProfile } from "@/types/job";
 import { API_BASE_URL } from "@/config/api";
 import { useJobPilotApi } from "@/hooks/useJobPilotApi";
@@ -15,6 +14,8 @@ import CoverLetterModal from "@/components/CoverLetterModal";
 import FilterBar from "@/components/FilterBar";
 import SocialSearchLinks from "@/components/SocialSearchLinks";
 import ApplyStudioModal from "@/components/ApplyStudioModal";
+import LandingHero from "@/components/LandingHero";
+import Footer from "@/components/Footer";
 import Pagination from "@/components/Pagination";
 
 const STORAGE_KEY_PROFILE = "jobpilot_saved_profile";
@@ -42,7 +43,7 @@ export default function DashboardPage() {
   const [selectedJobForStudio, setSelectedJobForStudio] = useState<JobItem | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
- // ১. ইউজার ডেটা লোড (Database Priority + LocalStorage Fallback)
+  // ১. ইউজার ডেটা লোড
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -95,57 +96,55 @@ export default function DashboardPage() {
 
   // ৩. রেজুমে আপলোড ও পাইপলাইন রান
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  setLoading(true);
-  const formData = new FormData();
-  formData.append("file", file);
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("file", file);
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/pipeline/run`, {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/pipeline/run`, {
+        method: "POST",
+        body: formData,
+      });
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Pipeline execution failed");
-    }
-
-    const result: PipelineResponse = await res.json();
-    const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    // স্টেট আপডেট
-    setProfile(result.profile);
-    setJobs(result.matched_jobs);
-    setLastSynced(timeStr);
-    setCurrentPage(1);
-
-    // ১. ইউজার সাইন-ইন থাকলে সরাসরি ডেটাবেজে ব্যাকআপ
-    if (isSignedIn) {
-      try {
-        await savePipeline(result);
-      } catch (dbErr) {
-        console.error("Database save error:", dbErr);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Pipeline execution failed");
       }
+
+      const result: PipelineResponse = await res.json();
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      setProfile(result.profile);
+      setJobs(result.matched_jobs);
+      setLastSynced(timeStr);
+      setCurrentPage(1);
+
+      if (isSignedIn) {
+        try {
+          await savePipeline(result);
+        } catch (dbErr) {
+          console.error("Database save error:", dbErr);
+        }
+      }
+
+      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(result.profile));
+      localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(result.matched_jobs));
+      localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
+    } catch (err: unknown) {
+      const errorMessage =
+        typeof err === "object" && err !== null && "message" in err
+          ? err.message
+          : "Error parsing resume and aggregating jobs. Ensure backend is running.";
+      alert(errorMessage);
+      console.error(err);
+    } finally {
+      setLoading(false);
+      e.target.value = "";
     }
-
-    // ২. লোকালস্টোরেজ ব্যাকআপ (অফলাইন বা গেস্ট ইউজারের জন্য)
-    localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(result.profile));
-    localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(result.matched_jobs));
-    localStorage.setItem(STORAGE_KEY_SYNC_TIME, timeStr);
-
-  } catch (err: unknown) {
-    const errorMessage = typeof err === "object" && err !== null && "message" in err ? err.message : "Error parsing resume and aggregating jobs. Ensure backend is running.";
-    alert(errorMessage);
-    console.error(err);
-  } finally {
-    setLoading(false);
-    // ফাইল ইনপুট রিসেট করা (একই ফাইল আবার আপলোড করার সুবিধার জন্য)
-    e.target.value = "";
-  }
-};
+  };
 
   // ৪. জব রিফ্রেশ
   const handleRefreshJobs = async () => {
@@ -189,7 +188,6 @@ export default function DashboardPage() {
       setLastSynced(timeStr);
       setCurrentPage(1);
 
-      // আপডেট করা জব লিস্ট ডেটাবেজে সেভ
       if (isSignedIn) {
         savePipeline({
           profile: profile,
@@ -253,75 +251,69 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090D16] text-slate-100 p-4 sm:p-6 md:p-12 font-sans selection:bg-cyan-500 selection:text-slate-950 overflow-x-hidden w-full">
-      <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 w-full">
-        <Header
-          loading={loading}
-          refreshing={refreshing}
-          hasProfile={!!profile}
-          lastSynced={lastSynced}
-          onFileUpload={handleFileUpload}
-          onRefreshJobs={handleRefreshJobs}
-        />
+    <div className="min-h-screen bg-[#090D16] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950 flex flex-col justify-between w-full">
+      {/* 1. Header (পুরো স্ক্রিন জুড়ে বর্ডার ও গ্লাস ইফেক্ট পাবে) */}
+      <Header
+        loading={loading}
+        refreshing={refreshing}
+        hasProfile={!!profile}
+        lastSynced={lastSynced}
+        onFileUpload={handleFileUpload}
+        onRefreshJobs={handleRefreshJobs}
+      />
 
-        <main className="space-y-6 md:space-y-8">
-          {loading && <LoadingState />}
+      {/* 2. Main Content Container (প্রশস্ত ও স্ট্যান্ডার্ড 7xl উইডথ) */}
+      <main className="flex-1 w-full py-8 md:py-10 space-y-8">
+        {loading && <LoadingState />}
 
-          {!loading && !profile && (
-            <div className="rounded-3xl border border-dashed border-cyan-950/80 bg-slate-900/20 p-12 md:p-20 text-center flex flex-col items-center justify-center">
-              <div className="p-4 rounded-2xl bg-slate-950 border border-cyan-950 text-cyan-400 mb-4 shadow-sm">
-                <BsFileEarmarkTextFill className="w-8 h-8 md:w-10 md:h-10" />
-              </div>
-              <h3 className="text-lg md:text-xl font-bold text-slate-200">No Resume Uploaded</h3>
-              <p className="text-slate-400 text-xs md:text-sm max-w-sm mt-2 leading-relaxed">
-                Upload your PDF or DOCX resume once. It will stay saved securely to your account so you can check fresh vacancies anytime with a single click.
-              </p>
-            </div>
-          )}
+        {!loading && !profile && (
+          <LandingHero onFileUpload={handleFileUpload} loading={loading} />
+        )}
 
-          {!loading && profile && (
-            <>
-              <ProfileSummary profile={profile} totalFound={jobs.length} />
+        {!loading && profile && (
+          <div className="space-y-6">
+            <ProfileSummary profile={profile} totalFound={jobs.length} />
 
-              <div className="space-y-4">
-                <FilterBar
-                  selectedTab={selectedTab}
-                  onSelectTab={setSelectedTab}
-                  totalCount={filteredJobs.length}
-                  districts={districts}
-                  selectedDistrict={selectedDistrict}
-                  onSelectDistrict={setSelectedDistrict}
-                  searchKeyword={searchKeyword}
-                  onSearchKeywordChange={setSearchKeyword}
-                />
+            <FilterBar
+              selectedTab={selectedTab}
+              onSelectTab={setSelectedTab}
+              totalCount={filteredJobs.length}
+              districts={districts}
+              selectedDistrict={selectedDistrict}
+              onSelectDistrict={setSelectedDistrict}
+              searchKeyword={searchKeyword}
+              onSearchKeywordChange={setSearchKeyword}
+            />
 
-                <SocialSearchLinks
-                  keyword={searchKeyword || profile.preferred_job_titles?.[0] || "React Developer"}
-                  location={selectedDistrict !== "ALL" ? selectedDistrict : profile.district || "Bangladesh"}
-                />
+            <SocialSearchLinks
+              keyword={searchKeyword || profile.preferred_job_titles?.[0] || "React Developer"}
+              location={selectedDistrict !== "ALL" ? selectedDistrict : profile.district || "Bangladesh"}
+            />
 
-                <JobGrid
-                  jobs={paginatedJobs}
-                  profile={profile}
-                  appliedJobs={appliedJobs}
-                  onToggleApply={toggleApplied}
-                  onOpenCoverLetter={(job) => setSelectedJobForModal(job)}
-                  onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}
-                />
+            <JobGrid
+              jobs={paginatedJobs}
+              profile={profile}
+              appliedJobs={appliedJobs}
+              onToggleApply={toggleApplied}
+              onOpenCoverLetter={(job) => setSelectedJobForModal(job)}
+              onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}
+            />
 
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={filteredJobs.length}
-                  itemsPerPage={ITEMS_PER_PAGE}
-                  onPageChange={handlePageChange}
-                />
-              </div>
-            </>
-          )}
-        </main>
-      </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredJobs.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
+      </main>
 
+      {/* 3. Footer (পুরো স্ক্রিন জুড়ে বিস্তৃত থাকবে) */}
+      <Footer />
+
+      {/* Modals */}
       <CoverLetterModal
         job={selectedJobForModal}
         onClose={() => setSelectedJobForModal(null)}

@@ -1,13 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Hind_Siliguri, Plus_Jakarta_Sans } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const englishFont = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-english",
+  display: "swap",
+});
+
+const banglaFont = Hind_Siliguri({
+  subsets: ["bengali"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-bangla",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "JobPilot AI | Autonomous AI Job Search",
-  description: "AI-powered job matching & application studio",
+  title: "JobPilot AI - Autonomous Career Suite",
+  description: "Smart AI Job Finding & Application Agent",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
@@ -16,13 +31,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider
-      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL || undefined}
-      signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
-    >
-      <html lang="en">
-        <body className={`${inter.className} bg-[#090D16] text-slate-100 antialiased`}>
+    <ClerkProvider>
+      <html lang="bn" className={`${englishFont.variable} ${banglaFont.variable}`}>
+        <body className="font-bangla bg-[#090D16] text-slate-100 antialiased selection:bg-cyan-500 selection:text-slate-950">
           {children}
         </body>
       </html>

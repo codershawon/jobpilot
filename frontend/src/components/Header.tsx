@@ -1,17 +1,20 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { BsCloudArrowUpFill, BsArrowRepeat } from "react-icons/bs";
-import { UserButton, useUser } from "@clerk/nextjs";
-import { HiSparkles } from "react-icons/hi2";
-import { TbBrain } from "react-icons/tb";
+import React, { useRef } from "react";
+import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
+import { 
+  BsUpload, 
+  BsArrowRepeat, 
+  BsPersonCircle,
+} from "react-icons/bs";
+import Logo from "./Logo";
+import Container from "./Container";
 
 interface HeaderProps {
   loading: boolean;
   refreshing: boolean;
   hasProfile: boolean;
-  lastSynced: string | null;
+  lastSynced?: string | null;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRefreshJobs: () => void;
 }
@@ -20,105 +23,88 @@ export default function Header({
   loading,
   refreshing,
   hasProfile,
-  lastSynced,
   onFileUpload,
   onRefreshJobs,
 }: HeaderProps) {
   const { isSignedIn, isLoaded } = useUser();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <header className="border-b border-cyan-950/60 pb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-      {/* লোগো ও হেডার টেক্সট */}
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 text-xs font-semibold uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-            <HiSparkles className="w-3.5 h-3.5 animate-pulse" />
-            Autonomous AI Recruiter
+    <header className="sticky top-0 z-50 w-full backdrop-blur-md bg-[#090D16]/80 border-b border-slate-800/80">
+      <Container className="h-16 flex items-center justify-between">
+        
+        {/* Brand Left */}
+        <Logo />
+
+        {/* Center: Realtime Autonomous Status Badge */}
+        <div className="hidden md:inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-cyan-950/80 shadow-inner">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
           </span>
-          <span className="text-slate-500 text-xs font-mono flex items-center gap-1">
-            <TbBrain className="w-3.5 h-3.5 text-cyan-500/50" /> Multi-Source Live
+          <span className="text-xs font-medium text-slate-300">
+            Autonomous Agent: <span className="text-cyan-400 font-semibold">Ready</span>
           </span>
         </div>
-        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-100 mt-3">
-          Job<span className="text-cyan-400">Pilot</span>
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Precision CV parsing, persistent candidate profile & instant multi-platform vacancy syncing.
-        </p>
-        {lastSynced && (
-          <p className="text-xs text-cyan-500/70 font-mono mt-1">
-            Last Synced: {lastSynced}
-          </p>
-        )}
-      </div>
 
-      {/* অ্যাকশন বাটনস */}
-      <div className="flex flex-wrap items-center gap-3">
-        {hasProfile && (
-          <button
-            onClick={onRefreshJobs}
-            disabled={loading || refreshing}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-900 border border-cyan-500/30 hover:border-cyan-400 text-cyan-400 font-bold text-xs transition duration-200 active:scale-95 shadow-[0_0_15px_rgba(6,182,212,0.1)] disabled:opacity-50"
-          >
-            <BsArrowRepeat className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-            <span>{refreshing ? "Checking Vacancies..." : "Check New Vacancies"}</span>
-          </button>
-        )}
+        {/* Actions Right */}
+        <div className="flex items-center gap-3">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onFileUpload}
+            accept=".pdf,.docx"
+            className="hidden"
+            disabled={loading}
+          />
 
-        {/* অথেনটিকেশন সেকশন */}
-        <div className="flex items-center gap-2">
-          {!isLoaded ? (
-            <div className="w-9 h-9 rounded-xl bg-slate-800/80 border border-cyan-500/20 animate-pulse" />
-          ) : !isSignedIn ? (
+          {hasProfile && (
             <div className="flex items-center gap-2">
-              {/* সাইন ইন বাটন (Outlined Ghost Style) */}
-              <Link
-                href="/sign-in"
-                className="px-4 py-2.5 rounded-xl border border-cyan-500/30 bg-slate-900/60 hover:bg-slate-800 hover:border-cyan-400 text-cyan-400 font-semibold text-xs transition duration-200 shadow-[0_0_10px_rgba(6,182,212,0.05)] active:scale-95"
+              <button
+                onClick={onRefreshJobs}
+                disabled={refreshing || loading}
+                className="group flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 transition-all active:scale-95 disabled:opacity-50"
+                title="Sync live jobs from portals"
               >
-                Sign In
-              </Link>
+                <BsArrowRepeat className={`w-3.5 h-3.5 text-cyan-400 ${refreshing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} />
+                <span className="hidden sm:inline">{refreshing ? "Syncing..." : "Sync Jobs"}</span>
+              </button>
 
-              {/* সাইন আপ বাটন (Cyan Glow Accent) */}
-              <Link
-                href="/sign-up"
-                className="relative group inline-flex items-center"
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:text-cyan-200 transition-all active:scale-95 disabled:opacity-50"
               >
-                <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500 to-teal-400 rounded-xl blur opacity-30 group-hover:opacity-75 transition duration-300"></div>
-                <span className="relative px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition active:scale-95 shadow-md">
-                  Sign Up
-                </span>
-              </Link>
+                <BsUpload className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Change CV</span>
+              </button>
             </div>
-          ) : (
-            <div className="p-1 rounded-xl bg-slate-900 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.15)] flex items-center justify-center">
-              <UserButton
-                appearance={{
-                  elements: {
-                    userButtonAvatarBox: "w-8 h-8 rounded-lg",
-                  },
-                }}
-              />
+          )}
+
+          {/* User Sign-In / Account */}
+          {isLoaded && (
+            <div className="flex items-center pl-2 border-l border-slate-800">
+              {isSignedIn ? (
+                <UserButton
+                  appearance={{
+                    elements: {
+                      userButtonAvatarBox: "w-8 h-8 rounded-xl border border-cyan-500/40 ring-2 ring-cyan-500/10 hover:scale-105 transition-transform",
+                    },
+                  }}
+                />
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-slate-950 transition-all shadow-md shadow-cyan-500/20 active:scale-95">
+                    <BsPersonCircle className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
+                  </button>
+                </SignInButton>
+              )}
             </div>
           )}
         </div>
 
-        {/* রেজুমে আপলোড বাটন */}
-        <label className="relative group cursor-pointer">
-          <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500 to-cyan-300 rounded-xl blur opacity-25 group-hover:opacity-60 transition duration-300"></div>
-          <div className="relative flex items-center gap-2.5 px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs md:text-sm transition active:scale-95 shadow-lg shadow-cyan-500/10">
-            <BsCloudArrowUpFill className="w-4 h-4 text-slate-950" />
-            <span>{hasProfile ? "Change Resume" : "Upload Resume"}</span>
-            <input
-              type="file"
-              accept=".pdf,.docx"
-              className="hidden"
-              onChange={onFileUpload}
-              disabled={loading || refreshing}
-            />
-          </div>
-        </label>
-      </div>
+      </Container>
     </header>
   );
 }
