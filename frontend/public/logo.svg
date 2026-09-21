@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="100%" height="100%">
+  <!-- Outer Rounded Squircle Frame -->
+  <rect x="10" y="10" width="236" height="236" rx="64" fill="#0B101B" stroke="#162B4D" stroke-width="8"/>
+
+  <!-- Left Lower Thrust Trails (Speed Streaks) -->
+  <path d="M54 166 L82 138" stroke="#38BDF8" stroke-width="12" stroke-linecap="round"/>
+  <path d="M74 186 L102 158" stroke="#38BDF8" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- Paper Jet / Rocket Body Facets -->
+  <!-- 1. Upper Left Wing (Medium Bright Blue) -->
+  <path d="M192 64 L64 128 L112 138 Z" fill="#0284C7"/>
+
+  <!-- 2. Central Plane Body (Bright Vivid Cyan-Blue) -->
+  <path d="M192 64 L112 138 L136 190 Z" fill="#0EA5E9"/>
+
+  <!-- 3. Right Fold Wing / Tail (Deep Rich Blue) -->
+  <path d="M192 64 L136 190 L192 120 Z" fill="#0369A1"/>
+
+  <!-- Top Beacon / Cockpit Circle Indicator -->
+  <circle cx="192" cy="64" r="18" fill="#38BDF8"/>
+  <circle cx="192" cy="64" r="10" fill="#FFFFFF"/>
+</svg>
