@@ -9,7 +9,18 @@ CV টেক্সট থেকে স্ট্রাকচার্ড প্�
 import re
 
 from app.models import CVProfile
+from app.services.classifier import detect_function_from_profile
 from app.services.llm.router import complete_json
+
+
+def _with_function(profile: CVProfile) -> CVProfile:
+    """প্রোফাইলে কাজের ক্ষেত্র বসিয়ে দেয়। LLM আর লোকাল — দুই পথেই লাগবে।"""
+    profile.job_function = detect_function_from_profile(
+        skills=profile.skills,
+        preferred_titles=profile.preferred_job_titles,
+        summary=profile.summary,
+    )
+    return profile
 
 # ──────────────────────────────────────────────────────────
 CV_SCHEMA = {
@@ -26,18 +37,55 @@ CV_SCHEMA = {
         "preferred_job_titles": {"type": "array", "items": {"type": "string"}},
         "preferred_locations": {"type": "array", "items": {"type": "string"}},
         "open_to_remote": {"type": "boolean"},
+        # ── এই দুইটা এতদিন চাওয়াই হয়নি, তাই কখনো আসেনি ──
+        "work_experience": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "company": {"type": "string"},
+                    "duration": {"type": "string"},
+                    "highlights": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["title", "company"],
+            },
+        },
+        "education": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "degree": {"type": "string"},
+                    "institution": {"type": "string"},
+                    "year": {"type": "string"},
+                },
+                "required": ["degree", "institution"],
+            },
+        },
     },
     "required": ["full_name", "skills", "preferred_job_titles"],
 }
 
 SYSTEM_PROMPT = (
     "You are an expert HR CV parser. The CV may be written in English or Bangla, "
-    "or a mix of both. Extract the candidate's information accurately.\n"
+    "or a mix of both. Extract EVERY field below from the CV.\n"
     "- district: the Bangladeshi district name in English (e.g. Cumilla, Dhaka, "
     "Chattogram). If not found, leave it empty.\n"
-    "- preferred_job_titles: 3-5 realistic job titles this candidate should apply "
-    "for, based on their actual skills and experience.\n"
-    "- years_of_experience: a number, 0 if fresher.\n"
+    "- skills: every technology, tool, framework and language named anywhere in "
+    "the CV, including inside project descriptions. Do not stop at the skills "
+    "section.\n"
+    "- work_experience: every job, internship and freelance role. For each, give "
+    "title, company, duration as written, and 2-3 highlights taken from the CV. "
+    "Never leave this empty if the CV names any employer.\n"
+    "- education: every degree, diploma or certificate with institution and year.\n"
+    "- preferred_job_titles: 4-6 job titles this candidate should apply for. "
+    "Include both the exact titles they have held and adjacent ones their skills "
+    "qualify them for. These become job-search keywords, so use common Bangladeshi "
+    "job-board wording (e.g. 'Software Engineer', 'Frontend Developer', "
+    "'MERN Stack Developer').\n"
+    "- years_of_experience: a number, 0 if fresher. Count internships as "
+    "experience.\n"
     "- Do not invent an email or phone number. If absent, use an empty string."
 )
 
@@ -73,11 +121,11 @@ async def extract_profile(raw_text: str) -> CVProfile:
             for field in ("email", "phone", "location", "district", "summary"):
                 if isinstance(data.get(field), str) and not data[field].strip():
                     data[field] = None
-            return CVProfile(**data)
+            return _with_function(CVProfile(**data))
         except Exception as e:  # noqa: BLE001
             print(f"[CV] schema mismatch, falling back to local parser: {e}")
 
-    return local_parse(raw_text)
+    return _with_function(local_parse(raw_text))
 
 
 def local_parse(raw_text: str) -> CVProfile:

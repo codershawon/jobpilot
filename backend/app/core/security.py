@@ -45,27 +45,17 @@ class RateLimiter:
         user_id = getattr(request.state, "user_id", None)
         key = f"{self.name}:{_client_id(request, user_id)}"
 
-        now = time.time()
-        bucket = _hits[key]
+        from app.core.cache import incr_with_expiry, ttl_of
 
-        while bucket and now - bucket[0] > self.window:
-            bucket.popleft()
+        count = await incr_with_expiry(f"rl:{key}", self.window)
 
-        if len(bucket) >= self.limit:
-            retry_after = int(self.window - (now - bucket[0])) + 1
+        if count > self.limit:
+            retry_after = await ttl_of(f"rl:{key}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"অনেক বেশি অনুরোধ। {retry_after} সেকেন্ড পরে আবার চেষ্টা করুন।",
                 headers={"Retry-After": str(retry_after)},
             )
-
-        bucket.append(now)
-
-        # মেমরি বাড়তে না দেওয়ার জন্য মাঝে মাঝে পরিষ্কার
-        if len(_hits) > 10_000:
-            stale = [k for k, v in _hits.items() if not v or now - v[-1] > 3600]
-            for k in stale:
-                _hits.pop(k, None)
 
 
 # TODO (প্রোডাকশন): একাধিক worker হলে Redis-এ সরাও —

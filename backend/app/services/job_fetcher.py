@@ -4,17 +4,22 @@ import re
 from scrapers.bdjobs_scraper import BdjobsScraper
 from scrapers.govt_scraper import GovtJobScraper
 from scrapers.teletalk_alljobs_scraper import TeletalkAllJobsScraper
-from scrapers.teletalk_alljobs_scraper import TeletalkAllJobsScraper
 from scrapers.rss_scraper import all_rss_sources
 from scrapers.portal_links import PortalLinksSource
+from app.services.classifier import classify_job
+from app.core.cache import get_json, job_cache_key, set_json
+from app.services.deadline import apply_deadline
+from scrapers.extra_sources import (
+    fetch_himalayas,
+    fetch_reliefweb,
+    fetch_weworkremotely,
+)
 from typing import List
 from bs4 import BeautifulSoup
 import httpx
 from app.config import settings
 from app.models import JobItem
 bdjobs_engine = BdjobsScraper()
-govt_engine = GovtJobScraper()
-teletalk_engine = TeletalkAllJobsScraper()
 teletalk_engine = TeletalkAllJobsScraper()
 portal_source = PortalLinksSource()
 
@@ -39,7 +44,7 @@ async def fetch_bdjobs_unlimited(keywords: List[str], target_district: str = "Dh
             job_district = r.get("district") or target_district or "Dhaka"
             is_rem = bool(r.get("is_remote", False))
             
-            jobs.append(JobItem(
+            job = JobItem(
                 id=generate_id("bdjobs", r["url"]),
                 title=r.get("title", "Job Vacancy"),
                 company=r.get("company", "Private Employer"),
@@ -57,7 +62,9 @@ async def fetch_bdjobs_unlimited(keywords: List[str], target_district: str = "Dh
                 match_reason="Matched from BDJobs circular",
                 cover_letter="",
                 status="SAVED"
-            ))
+            )
+            apply_deadline(job, r.get("deadline"))
+            jobs.append(job)
     except Exception as e:
         print(f"[Bdjobs Fetch Notice]: {e}")
         
@@ -66,6 +73,12 @@ async def fetch_bdjobs_unlimited(keywords: List[str], target_district: str = "Dh
 # ১.১ লাইভ সরকারি চাকরি ফেচার (bdgovtjob.net ইঞ্জিন)
 async def fetch_govt_jobs_live(keywords=None, target_district="Dhaka"):
     """keywords উপেক্ষা করা হয় - সব আনা হয়, ফিল্টারিং পরে।"""
+    # সরকারি সার্কুলার কি-ওয়ার্ডে বদলায় না — একবার এনে সবার জন্য
+    gov_cached = await get_json("jobs:govt:all")
+    if gov_cached:
+        print(f"[CACHE HIT] govt — {len(gov_cached)} jobs")
+        return [JobItem(**j) for j in gov_cached]
+
     tasks = [teletalk_engine.fetch()]
     tasks += [s.fetch() for s in all_rss_sources() if s.category in ("govt", "mixed")]
 
@@ -78,7 +91,7 @@ async def fetch_govt_jobs_live(keywords=None, target_district="Dhaka"):
             continue
         for r in res:
             deadline = r.get("deadline")
-            jobs.append(JobItem(
+            job = JobItem(
                 id=generate_id(r["source_id"], r.get("external_id") or r["url"]),
                 title=r["title"],
                 company=r.get("company") or "Government of Bangladesh",
@@ -91,12 +104,18 @@ async def fetch_govt_jobs_live(keywords=None, target_district="Dhaka"):
                 description=r.get("description", ""),
                 salary=r.get("salary") or "জাতীয় বেতন স্কেল",
                 tags=r.get("tags", ["Govt"]),
-                posted_date=deadline.strftime("%d-%m-%Y") if deadline else "চলমান",
+                posted_date=r.get("published_date") or "সাম্প্রতিক",
                 match_score=85,
                 match_reason="Government recruitment circular",
                 cover_letter="",
                 status="SAVED",
-            ))
+            )
+            apply_deadline(job, deadline)
+            jobs.append(job)
+
+    for j in jobs:
+        classify_job(j)
+    await set_json("jobs:govt:all", [j.model_dump() for j in jobs], ttl_seconds=1800)
     return jobs
 
 # ২. LinkedIn Public Job Postings (No Limits)
@@ -135,7 +154,7 @@ async def fetch_linkedin_unlimited(keywords: List[str]) -> List[JobItem]:
 
                             is_remote = "remote" in exact_loc.lower() or "worldwide" in loc.lower() or "remote" in title.lower()
 
-                            jobs.append(JobItem(
+                            li_job = JobItem(
                                 id=generate_id("linkedin", apply_url or title),
                                 title=title,
                                 company=company,
@@ -147,7 +166,9 @@ async def fetch_linkedin_unlimited(keywords: List[str]) -> List[JobItem]:
                                 url=apply_url or "https://www.linkedin.com/jobs",
                                 description=f"LinkedIn Opening: {title} at {company}. Direct apply available.",
                                 tags=[kw, "LinkedIn"]
-                            ))
+                            )
+                            apply_deadline(li_job, None)
+                            jobs.append(li_job)
                 except Exception as e:
                     print(f"[LinkedIn Notice for {kw}]: {e}")
                     continue
@@ -275,30 +296,54 @@ async def aggregate_all_jobs(
     limit_per_source: int = None
 ) -> List[JobItem]:
     dist = districts[0] if districts and len(districts) > 0 and districts[0] != "All" else "Cumilla"
+    # ── ক্যাশ চেক ──
+    ckey = job_cache_key(keywords, districts, include_gov, only_gov)
+    cached = await get_json(ckey)
+    if cached:
+        print(f"[CACHE HIT] {ckey} — {len(cached)} jobs")
+        return [JobItem(**j) for j in cached]
 
-    # ১. ইউজার যদি ফ্রন্টএন্ড থেকে শুধু Govt Circulars দেখতে চায়:
+    # ১. ইউজার যদি শুধু Govt Circulars দেখতে চায়:
     if only_gov:
-        return await fetch_govt_jobs_live(keywords=keywords, target_district=dist)
+        gov_only = await fetch_govt_jobs_live(keywords=keywords, target_district=dist)
+        await set_json(ckey, [j.model_dump() for j in gov_only], ttl_seconds=1800)
+        return gov_only
 
-    # ২. সাধারণ সার্চ হলে সবগুলো প্লাটফর্ম থেকে ডেটা আসবে:
+    # ২. সাধারণ সার্চ হলে সবগুলো প্লাটফর্ম থেকে:
     search_keywords = keywords or ["React", "Next.js", "Frontend Developer", "Web Developer", "Node.js", "JavaScript"]
 
-    tasks = [
-        fetch_bdjobs_unlimited(search_keywords, target_district=dist),
-        fetch_remotive_unlimited(search_keywords),
-        fetch_arbeitnow_unlimited(search_keywords),
-        fetch_remoteok_unlimited(search_keywords)
+        # নাম ও টাস্ক একসাথে — কখনো আলাদা হতে পারবে না
+    jobs_by_source: list[tuple[str, object]] = [
+        ("bdjobs", fetch_bdjobs_unlimited(search_keywords, target_district=dist)),
+        ("bdjobs_ngo", fetch_bdjobs_unlimited(["NGO", "Project Officer"], target_district=dist)),
+        ("remotive", fetch_remotive_unlimited(search_keywords)),
+        ("arbeitnow", fetch_arbeitnow_unlimited(search_keywords)),
+        ("remoteok", fetch_remoteok_unlimited(search_keywords)),
+        ("linkedin", fetch_linkedin_unlimited(search_keywords)),
+        ("weworkremotely", fetch_weworkremotely(search_keywords)),
+        ("himalayas", fetch_himalayas(search_keywords)),
+        # ReliefWeb: অনুমোদিত appname দরকার — https://apidoc.reliefweb.int/
+        # ("reliefweb", fetch_reliefweb(search_keywords)),
     ]
 
     if include_gov:
-        tasks.append(fetch_govt_jobs_live(search_keywords, target_district=dist))
+        jobs_by_source.append(
+            ("govt", fetch_govt_jobs_live(search_keywords, target_district=dist))
+        )
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    source_names = [name for name, _ in jobs_by_source]
+    results = await asyncio.gather(*(task for _, task in jobs_by_source), return_exceptions=True)
 
     all_jobs: List[JobItem] = []
-    for res in results:
+    for name, res in zip(source_names, results):
+        if isinstance(res, Exception):
+            print(f"[FETCH FAIL] {name}: {type(res).__name__} — {res}")
+            continue
         if isinstance(res, list):
+            print(f"[FETCH OK]   {name}: {len(res)} jobs")
             all_jobs.extend(res)
+
+    print(f"[FETCH TOTAL] {len(all_jobs)} jobs before dedup")
 
     # ডুপ্লিকেট রিমুভ (ইউনিক আইডি দিয়ে)
     unique_jobs = {}
@@ -306,7 +351,16 @@ async def aggregate_all_jobs(
         if j.id not in unique_jobs and len(j.title.strip()) > 2:
             unique_jobs[j.id] = j
 
-    return list(unique_jobs.values())
+    final = list(unique_jobs.values())
+    for job in final:
+        classify_job(job)
+
+    print(f"[FETCH FINAL] {len(final)} unique jobs")
+
+    # ৩০ মিনিট ধরে রাখা — সার্কুলার এত দ্রুত বদলায় না
+    await set_json(ckey, [j.model_dump() for j in final], ttl_seconds=1800)
+
+    return final
 
 async def aggregate_jobs_by_profile(
     keywords: List[str],

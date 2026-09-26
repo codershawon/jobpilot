@@ -182,7 +182,7 @@ async def process_matching_pipeline(
     jobs.sort(key=lambda j: j.match_score, reverse=True)
 
     # স্তর ২ — টপ ৫-এ LLM, একসাথে
-    top = jobs[:5]
+    top = jobs[:12]
     evaluations = await asyncio.gather(
         *[evaluate_job_with_llm(profile, j) for j in top],
         return_exceptions=True,

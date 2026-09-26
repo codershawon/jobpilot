@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from datetime import date
 
 
 class WorkExperience(BaseModel):
@@ -30,6 +31,7 @@ class CVProfile(BaseModel):
     preferred_locations: List[str] = Field(default_factory=list)
     open_to_remote: bool = True
     raw_text_char_count: int = 0
+    job_function: str = "general"
 
 
 class CVParseResponse(BaseModel):
@@ -56,6 +58,11 @@ class JobItem(BaseModel):
     match_reason: Optional[str] = None
     cover_letter: Optional[str] = None
     status: str = "SAVED"    # "SAVED", "APPLIED", "ARCHIVED"
+    sectors: List[str] = Field(default_factory=lambda: ["private"])
+    job_function: str = "general"
+    deadline: Optional[date] = None
+    days_left: Optional[int] = None
+    urgency: str = "unknown"
 
 
 class JobSearchQuery(BaseModel):

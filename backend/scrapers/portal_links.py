@@ -68,6 +68,41 @@ PORTALS: list[dict[str, Any]] = [
         ),
         "category": "govt",
     },
+        {
+        "external_id": "portal_chakri",
+        "title": "Chakri.com — প্রাইভেট ও সরকারি চাকরি",
+        "company": "Chakri.com",
+        "url": "https://chakri.com/",
+        "description": (
+            "প্রথম আলোর জব পোর্টাল। ক্যাটাগরি ও জেলাভিত্তিক "
+            "প্রাইভেট কোম্পানির নিয়োগ বিজ্ঞপ্তি।"
+        ),
+        "category": "private",
+    },
+    {
+        "external_id": "portal_ugc",
+        "title": "UGC — বিশ্ববিদ্যালয় শিক্ষক নিয়োগ",
+        "company": "University Grants Commission",
+        "url": "https://www.ugc.gov.bd/",
+        "description": "পাবলিক বিশ্ববিদ্যালয়ের শিক্ষক ও কর্মকর্তা নিয়োগ।",
+        "category": "govt",
+    },
+    {
+        "external_id": "portal_un_bd",
+        "title": "UN Bangladesh — জাতিসংঘ সংস্থার নিয়োগ",
+        "company": "United Nations Bangladesh",
+        "url": "https://bangladesh.un.org/en/jobs",
+        "description": "UNDP, UNICEF, WFP সহ জাতিসংঘ সংস্থাগুলোর পদ।",
+        "category": "ngo",
+    },
+    {
+        "external_id": "portal_brac",
+        "title": "BRAC Careers",
+        "company": "BRAC",
+        "url": "https://careers.brac.net/",
+        "description": "বিশ্বের বৃহত্তম NGO-র নিয়োগ বিজ্ঞপ্তি।",
+        "category": "ngo",
+    },
 ]
 
 

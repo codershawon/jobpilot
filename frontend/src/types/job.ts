@@ -11,6 +11,7 @@ export interface CVProfile {
   preferred_locations: string[];
   open_to_remote: boolean;
   raw_text_char_count: number;
+  job_function?: string;
 }
 
 export interface JobItem {
@@ -31,6 +32,11 @@ export interface JobItem {
   match_reason?: string | null;
   cover_letter?: string | null;
   status: "SAVED" | "APPLIED" | "ARCHIVED";
+  sectors?: string[];
+  job_function?: string;
+  deadline?: string | null;
+  days_left?: number | null;
+  urgency?: "expired" | "critical" | "urgent" | "soon" | "normal" | "unknown";
 }
 
 export interface PipelineResponse {

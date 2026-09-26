@@ -30,21 +30,27 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
+    REDIS_URL: str = ""
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_TEST_CHAT_ID: str = ""
+    GITHUB_API_KEY: str = ""
 
     # ──────────────── Model tiers ────────────────
     # তালিকার ক্রম = fallback-এর ক্রম। উপরেরটা আগে চেষ্টা হবে।
     #
     # fast  → ভলিউম বেশি, মান মাঝারি হলেও চলে (CV পার্স, ম্যাচ ব্যাখ্যা)
-    # smart → ইউজার নিজে পড়বে ও পাঠাবে, মান এখানেই সব (কভার লেটার)
     TIER_FAST: List[str] = [
-        "gemini/gemini-2.5-flash-lite",
-        "groq/openai/gpt-oss-120b",
-        "openrouter/google/gemma-4-27b-it:free",
+        "gemini/gemini-flash-lite-latest",
+        "gemini/gemini-3.5-flash-lite",
+        "gemini/gemini-flash-latest",
+        "openrouter/openrouter/free",
     ]
     TIER_SMART: List[str] = [
-        "gemini/gemini-2.5-flash",
-        "gemini/gemini-2.5-flash-lite",
-        "groq/openai/gpt-oss-120b",
+        "gemini/gemini-pro-latest", 
+        "gemini/gemini-flash-latest",
+        "gemini/gemini-3.6-flash",
+        "gemini/gemini-3.5-flash-lite",
+        "openrouter/openrouter/free",
     ]
 
     # ──────────────── Embeddings (দিন ১০-এ চালু হবে) ────────────────
@@ -62,7 +68,12 @@ class Settings(BaseSettings):
 
     @property
     def has_any_llm(self) -> bool:
-        return bool(self.GEMINI_API_KEY or self.GROQ_API_KEY or self.OPENROUTER_API_KEY)
+        return bool(
+            self.GEMINI_API_KEY
+            or self.GROQ_API_KEY
+            or self.OPENROUTER_API_KEY
+            or self.GITHUB_API_KEY
+        )
 
     @property
     def cors_origins(self) -> List[str]:

@@ -20,20 +20,33 @@ from litellm import Router
 from app.config import settings
 
 # litellm-এর নিজস্ব বাচালতা বন্ধ
+import logging
+
 litellm.suppress_debug_info = True
 litellm.set_verbose = False
+
+# litellm-এর নিজস্ব লগারকে চুপ করাই — আমরা নিজেরা [LLM FAIL] প্রিন্ট করি
+logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
+logging.getLogger("LiteLLM Router").setLevel(logging.CRITICAL)
+logging.getLogger("litellm").setLevel(logging.CRITICAL)
 
 
 # ──────────────────────────────────────────────────────────
 # ১. যে প্রোভাইডারের key আছে শুধু তারই মডেল তালিকায় ঢুকবে
 # ──────────────────────────────────────────────────────────
+# prefix → .env-এর ভ্যারিয়েবল। নতুন প্রোভাইডার = এখানে এক লাইন।
+_PROVIDER_KEYS: dict[str, str] = {
+    "gemini/": "GEMINI_API_KEY",
+    "groq/": "GROQ_API_KEY",
+    "openrouter/": "OPENROUTER_API_KEY",
+    "github/": "GITHUB_API_KEY",
+}
+
+
 def _api_key_for(model: str) -> str:
-    if model.startswith("gemini/"):
-        return settings.GEMINI_API_KEY
-    if model.startswith("groq/"):
-        return settings.GROQ_API_KEY
-    if model.startswith("openrouter/"):
-        return settings.OPENROUTER_API_KEY
+    for prefix, setting_name in _PROVIDER_KEYS.items():
+        if model.startswith(prefix):
+            return getattr(settings, setting_name, "") or ""
     return ""
 
 
@@ -68,7 +81,7 @@ if _MODEL_LIST:
         num_retries=2,
         timeout=45,
         # smart-এ কিছু না থাকলে fast-এ নেমে যাবে
-        fallbacks=[{"smart": ["fast"]}, {"fast": ["smart"]}],
+ fallbacks=[{"smart": ["fast"]}],
         allowed_fails=3,
         cooldown_time=60,
     )
@@ -82,7 +95,9 @@ else:
 # ২. কোন কাজ কোন টিয়ারে যাবে
 # ──────────────────────────────────────────────────────────
 TASK_TIER: dict[str, str] = {
-    "cv_parse": "fast",
+    # CV একবারই পার্স হয়, কিন্তু পুরো পাইপলাইন এর উপর দাঁড়ানো।
+    # এখানে সস্তা মডেল ব্যবহার করে বাকি সব নষ্ট করার মানে নেই।
+    "cv_parse": "smart",
     "match_explain": "fast",
     "scam_detect": "fast",
     "tag_normalize": "fast",
@@ -149,6 +164,7 @@ async def complete(
             return content.strip()
         except Exception as e:  # noqa: BLE001
             last_error = e
+            print(f"[LLM try] {task}: {type(e).__name__} — {str(e)[:160]}")
             continue
 
     print(f"[LLM FAIL] {task}: {type(last_error).__name__} — {str(last_error)[:140]}")

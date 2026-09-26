@@ -98,6 +98,27 @@ try:
 except ImportError:
     logger.warning("cv router not found")
 
+try:
+    from app.api.v1.categories import router as categories_router
+
+    app.include_router(categories_router, prefix="/api")
+except ImportError:
+    logger.warning("categories router not found")
+
+try:
+    from app.api.v1.portals import router as portals_router
+
+    app.include_router(portals_router, prefix="/api")
+except Exception as e:
+    logger.warning("portals router লোড হয়নি: %s", e)
+
+try:
+    from app.api.v1.applications import router as applications_router
+
+    app.include_router(applications_router, prefix="/api")
+except Exception as e:
+    logger.warning("applications router লোড হয়নি: %s", e)
+
 
 @app.get("/")
 async def root():

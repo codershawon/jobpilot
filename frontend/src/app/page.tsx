@@ -5,13 +5,14 @@ import { useUser } from "@clerk/nextjs";
 import { PipelineResponse, JobItem, CVProfile } from "@/types/job";
 import { API_BASE_URL } from "@/config/api";
 import { useJobPilotApi } from "@/hooks/useJobPilotApi";
+import { useApplications } from "@/hooks/useApplications";
 
 import Header from "@/components/Header";
 import ProfileSummary from "@/components/ProfileSummary";
 import JobGrid from "@/components/JobGrid";
 import LoadingState from "@/components/LoadingState";
 import CoverLetterModal from "@/components/CoverLetterModal";
-import FilterBar from "@/components/FilterBar";
+import FilterBar, { Category } from "@/components/FilterBar";
 import SocialSearchLinks from "@/components/SocialSearchLinks";
 import ApplyStudioModal from "@/components/ApplyStudioModal";
 import Footer from "@/components/Footer";
@@ -20,6 +21,8 @@ import Container from "@/components/Container";
 import LandingBanner from "@/components/LandingHero";
 import SupportedPlatforms from "@/components/SupportedPlatforms";
 import HowItWorks from "@/components/HowItWorks";
+import UrgentDeadlines from "@/components/UrgentDeadlines";
+import OfficialPortals from "@/components/OfficialPortals";
 
 const STORAGE_KEY_PROFILE = "jobpilot_saved_profile";
 const STORAGE_KEY_JOBS = "jobpilot_saved_jobs";
@@ -31,6 +34,7 @@ const ITEMS_PER_PAGE = 6;
 export default function DashboardPage() {
   const { isSignedIn, isLoaded } = useUser();
   const { fetchSavedPipeline, savePipeline } = useJobPilotApi();
+  const { statusByJobId, saveApplication } = useApplications();
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +46,10 @@ export default function DashboardPage() {
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [districts, setDistricts] = useState<string[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("ALL");
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [selectedFunction, setSelectedFunction] = useState("ALL");
+  const [selectedSource, setSelectedSource] = useState("ALL");
+  const [categories, setCategories] = useState<{sectors: Category[]; functions: Category[]; sources: Category[]}>({ sectors: [], functions: [], sources: [] });
   const [searchKeyword, setSearchKeyword] = useState<string>("");
   const [selectedJobForStudio, setSelectedJobForStudio] = useState<JobItem | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -92,10 +100,27 @@ export default function DashboardPage() {
       .catch((err) => console.error("District fetch error:", err));
   }, []);
 
+  // ২.১ ক্যাটাগরি তালিকা লোড
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/categories`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.sectors) setCategories(data);
+      })
+      .catch(() => {
+        setTimeout(() => {
+          fetch(`${API_BASE_URL}/api/categories`)
+            .then((r) => r.json())
+            .then((d) => d.sectors && setCategories(d))
+            .catch(() => {});
+        }, 3000);
+      });
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
-  }, [selectedTab, selectedDistrict, searchKeyword]);
+  }, [selectedTab, selectedDistrict, searchKeyword, selectedSectors, selectedFunction, selectedSource]);
 
   // ৩. রেজুমে আপলোড ও পাইপলাইন রান
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,6 +149,11 @@ export default function DashboardPage() {
       setJobs(result.matched_jobs);
       setLastSynced(timeStr);
       setCurrentPage(1);
+
+      // CV অনুযায়ী কাজের ক্ষেত্র নিজে থেকেই বাছা হবে
+      if (result.profile.job_function && result.profile.job_function !== "general") {
+        setSelectedFunction(result.profile.job_function);
+      }
 
       if (isSignedIn) {
         try {
@@ -210,99 +240,88 @@ export default function DashboardPage() {
   };
 
   const toggleApplied = (id: string) => {
+    const nowApplied = !appliedJobs[id];
+
+    // UI সাথে সাথে বদলাবে, তারপর সার্ভারে যাবে
     setAppliedJobs((prev) => {
-      const updated = { ...prev, [id]: !prev[id] };
+      const updated = { ...prev, [id]: nowApplied };
       localStorage.setItem(STORAGE_KEY_APPLIED, JSON.stringify(updated));
       return updated;
     });
+
+    // লগইন থাকলে ডাটাবেসেও — তখন যেকোনো ডিভাইসে দেখা যাবে
+    if (isSignedIn && nowApplied) {
+      saveApplication(id, "APPLIED").catch((e) =>
+        console.error("ট্র্যাকারে যোগ করা যায়নি:", e)
+      );
+    }
   };
 
-const filteredJobs = useMemo(() => {
-  return jobs.filter((job) => {
-    const rawSource = (job.source || "").toUpperCase();
-    const rawUrl = (job.url || "").toLowerCase();
-    const rawTags = (job.tags || []).map((t: string) => (t || "").toLowerCase());
-    const rawTitle = (job.title || "").toLowerCase();
-    const rawMatchReason = (job.match_reason || "").toLowerCase();
+  const toggleSector = (id: string) => {
+    setSelectedSectors((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
 
-    // ১. বিডিজবস শনাক্তকরণ (URL বা Source বা Tag)
-    const isBdjobs = 
-      rawUrl.includes("bdjobs.com") || 
-      rawSource.includes("BDJOBS") || 
-      rawTags.includes("bdjobs");
+  const clearAllFilters = () => {
+    setSelectedSectors([]);
+    setSelectedFunction("ALL");
+    setSelectedSource("ALL");
+    setSelectedDistrict("ALL");
+    setSearchKeyword("");
+    setSelectedTab("ALL");
+  };
 
-    // ২. সরকারি জব শনাক্তকরণ (বিডিজবস কখনোই সরকারি ট্যাবে ঢুকবে না)
-    const isGovt = 
-      !isBdjobs && (
-        rawUrl.includes("bdgovtjob.net") ||
-        rawSource.includes("GOV") || 
-        rawTags.includes("govt") || 
-        rawTags.includes("সরকারি চাকরি") ||
-        rawMatchReason.includes("government") ||
-        rawTitle.includes("নিয়োগ") ||
-        rawTitle.includes("বিজ্ঞপ্তি")
-      );
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      // ১. স্ট্যাটাস ট্যাব
+      if (selectedTab === "APPLIED" && !appliedJobs[job.id]) return false;
+      if (selectedTab === "HIGH_MATCH" && (job.match_score || 0) < 50) return false;
 
-    // ৩. ট্যাব ফিল্টার লজিক
-    let matchesTab = true;
-    if (selectedTab === "APPLIED") {
-      matchesTab = !!appliedJobs[job.id];
-    } else if (selectedTab === "REMOTE") {
-      matchesTab = Boolean(job.is_remote);
-    } else if (selectedTab === "LOCAL") {
-      matchesTab = !job.is_remote;
-    } else if (selectedTab === "HIGH_MATCH") {
-      matchesTab = (job.match_score || 0) >= 50;
-    } else if (selectedTab === "BDJOBS") {
-      matchesTab = isBdjobs;
-    } else if (selectedTab === "GOVT") {
-      matchesTab = isGovt;
-    } else if (selectedTab === "LINKEDIN") {
-      matchesTab = rawSource.includes("LINKEDIN") || rawUrl.includes("linkedin.com");
-    } else if (selectedTab === "REMOTIVE") {
-      matchesTab = rawSource.includes("REMOTIVE") || rawUrl.includes("remotive.com");
-    } else if (selectedTab === "ARBEITNOW") {
-      matchesTab = rawSource.includes("ARBEITNOW") || rawUrl.includes("arbeitnow.com");
-    } else if (selectedTab !== "ALL") {
-      matchesTab = rawSource === selectedTab;
-    }
-
-    if (!matchesTab) return false;
-
-    // ৪. কি-ওয়ার্ড সার্চ ফিল্টার (Title, Company, Tags)
-    const kw = (searchKeyword || "").toLowerCase().trim();
-    if (kw) {
-      const titleMatch = rawTitle.includes(kw);
-      const compMatch = (job.company || "").toLowerCase().includes(kw);
-      const tagMatch = rawTags.some((t: string) => t.includes(kw));
-      if (!titleMatch && !compMatch && !tagMatch) return false;
-    }
-
-    // ৫. জেলা ফিল্টার (দেশব্যাপী বা রিমোট জব হলে সব জেলাতেই ডিসপ্লে করবে)
-    if (selectedDistrict && selectedDistrict !== "ALL") {
-      const targetDist = selectedDistrict.toLowerCase().trim();
-      const jDist = (job.district || "").toLowerCase().trim();
-      const jLoc = (job.location || "").toLowerCase().trim();
-
-      const isCountryWide = 
-        jDist.includes("bangladesh") || 
-        jLoc.includes("bangladesh") || 
-        jLoc.includes("anywhere") ||
-        job.is_remote || 
-        isGovt;
-
-      const matchesDistrictName = 
-        jDist.includes(targetDist) || 
-        jLoc.includes(targetDist);
-
-      if (!isCountryWide && !matchesDistrictName) {
+      // ২. সেক্টর — একটাও মিললেই চলবে
+      const jobSectors = job.sectors || ["private"];
+      if (selectedSectors.length > 0 && !selectedSectors.some((s) => jobSectors.includes(s)))
         return false;
-      }
-    }
 
-    return true;
-  });
-}, [jobs, selectedTab, appliedJobs, searchKeyword, selectedDistrict]);
+      // ৩. কাজের ক্ষেত্র
+      if (selectedFunction !== "ALL" && job.job_function !== selectedFunction)
+        return false;
+
+      // ৪. উৎস
+      if (
+        selectedSource !== "ALL" &&
+        !(job.source || "").toUpperCase().includes(selectedSource.toUpperCase())
+      )
+        return false;
+
+      // ৫. কি-ওয়ার্ড
+      const kw = (searchKeyword || "").toLowerCase().trim();
+      if (kw) {
+        const hay = `${job.title} ${job.company} ${(job.tags || []).join(" ")}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+
+      // ৬. জেলা — সরকারি ও রিমোট জব সব জেলাতেই দেখাবে
+      if (selectedDistrict !== "ALL") {
+        const target = selectedDistrict.toLowerCase().trim();
+        const place = `${job.district || ""} ${job.location || ""}`.toLowerCase();
+        const isCountryWide =
+          job.is_remote || jobSectors.includes("govt") || place.includes("bangladesh");
+        if (!isCountryWide && !place.includes(target)) return false;
+      }
+
+      return true;
+    });
+  }, [
+    jobs,
+    selectedTab,
+    appliedJobs,
+    searchKeyword,
+    selectedDistrict,
+    selectedSectors,
+    selectedFunction,
+    selectedSource,
+  ]);
 
   const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE) || 1;
   const paginatedJobs = useMemo(() => {
@@ -348,16 +367,32 @@ const filteredJobs = useMemo(() => {
         {!loading && profile && (
           <Container className="py-8 space-y-6">
             <ProfileSummary profile={profile} totalFound={jobs.length} />
+            <UrgentDeadlines
+              jobs={jobs}
+              appliedJobs={appliedJobs}
+              onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}
+            />
 
             <FilterBar
               selectedTab={selectedTab}
               onSelectTab={setSelectedTab}
               totalCount={jobs.length}
+              sectors={categories.sectors}
+              selectedSectors={selectedSectors}
+              onToggleSector={toggleSector}
+              functions={categories.functions}
+              selectedFunction={selectedFunction}
+              onSelectFunction={setSelectedFunction}
+              sources={categories.sources}
+              selectedSource={selectedSource}
+              onSelectSource={setSelectedSource}
               districts={districts}
               selectedDistrict={selectedDistrict}
               onSelectDistrict={setSelectedDistrict}
               searchKeyword={searchKeyword}
               onSearchKeywordChange={setSearchKeyword}
+              profileFunction={profile?.job_function}
+              onClearAll={clearAllFilters}
             />
 
             <SocialSearchLinks
@@ -365,10 +400,14 @@ const filteredJobs = useMemo(() => {
               location={selectedDistrict !== "ALL" ? selectedDistrict : profile.district || "Bangladesh"}
             />
 
+            <OfficialPortals />
+
             <JobGrid
               jobs={paginatedJobs}
               profile={profile}
-              appliedJobs={appliedJobs}
+              appliedJobs={{ ...appliedJobs, ...Object.fromEntries(
+                Object.entries(statusByJobId).map(([k, v]) => [k, v !== "SAVED"])
+              ) }}
               onToggleApply={toggleApplied}
               onOpenCoverLetter={(job) => setSelectedJobForModal(job)}
               onOpenApplyStudio={(job) => setSelectedJobForStudio(job)}

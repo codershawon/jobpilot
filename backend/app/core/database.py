@@ -26,7 +26,7 @@ else:
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=(settings.APP_ENV == "development"),
+    echo=False,
     future=True,
     pool_pre_ping=True,          # ← মৃত কানেকশন ধরার জন্য, অপরিহার্য
     connect_args=connect_args,

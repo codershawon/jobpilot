@@ -27,6 +27,9 @@ from app.models import (
 )
 from app.services.cv_parser import parse_cv
 from app.services.job_fetcher import aggregate_all_jobs, aggregate_jobs_by_profile
+from app.services.job_store import query_jobs
+from app.core.database import get_db
+from app.services.job_store import query_jobs
 from app.services.matcher import match_and_score_jobs, process_matching_pipeline
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline & Jobs"])
@@ -38,6 +41,11 @@ router = APIRouter(prefix="/pipeline", tags=["Pipeline & Jobs"])
 class SearchRequest(BaseModel):
     keywords: List[str] = Field(default_factory=list, max_length=10)
     districts: List[str] = Field(default_factory=list, max_length=10)
+    sectors: List[str] = Field(default_factory=list, max_length=8)
+    job_function: Optional[str] = None
+    hide_expired: bool = True
+    sort_by: str = "relevance"      # relevance | deadline
+    live: bool = False              # true হলে লাইভ স্ক্র্যাপ
     include_remote: bool = True
     include_gov: bool = True
     source: Optional[str] = None
@@ -53,12 +61,25 @@ class SearchRequest(BaseModel):
     response_model=JobSearchResponse,
     dependencies=[Depends(RateLimiter("search", limit=30, window_seconds=3600))],
 )
-async def search_jobs(payload: SearchRequest):
+async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)):
     only_gov = (payload.source or "").lower() == "govt" or (
         payload.job_type or ""
     ).lower() == "government"
 
     districts = [d for d in payload.districts if d and d != "All"]
+
+    if not payload.live:
+        db_jobs = await query_jobs(
+            db,
+            sectors=payload.sectors or None,
+            job_function=payload.job_function,
+            district=districts[0] if districts else None,
+            source=payload.source,
+            hide_expired=payload.hide_expired,
+            limit=500,
+        )
+        if db_jobs:
+            return JobSearchResponse(total_found=len(db_jobs), jobs=db_jobs)
 
     jobs = await aggregate_all_jobs(
         keywords=payload.keywords,
@@ -68,6 +89,32 @@ async def search_jobs(payload: SearchRequest):
         only_gov=only_gov,
         limit_per_source=payload.limit_per_source,
     )
+
+    # সেক্টর ফিল্টার — একটাও মিললেই রাখা হবে
+    if payload.sectors:
+        wanted = set(payload.sectors)
+        jobs = [j for j in jobs if wanted & set(j.sectors or [])]
+
+    # কাজের ক্ষেত্র ফিল্টার
+    if payload.job_function and payload.job_function != "ALL":
+        jobs = [j for j in jobs if j.job_function == payload.job_function]
+
+    # মেয়াদ শেষ হওয়া সার্কুলার দেখিয়ে লাভ নেই
+    if payload.hide_expired:
+        jobs = [j for j in jobs if j.urgency != "expired"]
+
+    if payload.sort_by == "deadline":
+        # তারিখ নেই এমনগুলো সবার শেষে
+        jobs.sort(key=lambda j: j.days_left if j.days_left is not None else 9999)
+
+    # মেয়াদ শেষ হওয়া সার্কুলার দেখিয়ে লাভ নেই
+    if payload.hide_expired:
+        jobs = [j for j in jobs if j.urgency != "expired"]
+
+    if payload.sort_by == "deadline":
+        # তারিখ নেই এমনগুলো সবার শেষে
+        jobs.sort(key=lambda j: j.days_left if j.days_left is not None else 9999)
+
     return JobSearchResponse(total_found=len(jobs), jobs=jobs)
 
 

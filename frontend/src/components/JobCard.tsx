@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { CVProfile, JobItem } from "@/types/job";
+import DeadlineBadge, { Urgency } from "./DeadlineBadge";
 import { BsGeoAltFill, BsCheckCircleFill, BsCheckCircle } from "react-icons/bs";
 import { HiSparkles, HiArrowTopRightOnSquare } from "react-icons/hi2";
 import { IoDocumentTextOutline } from "react-icons/io5";
@@ -59,7 +60,7 @@ export default function JobCard({
         </h3>
         <p className="text-sm font-medium text-slate-400 mt-0.5">{job.company}</p>
 
-        <div className="flex items-center gap-3 text-xs text-slate-400 mt-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-400 mt-2.5">
           <span className="flex items-center gap-1">
             <BsGeoAltFill size={14} color="#67e8f9" /> {job.location}
           </span>
@@ -68,6 +69,11 @@ export default function JobCard({
               Remote
             </span>
           )}
+          <DeadlineBadge
+            urgency={job.urgency as Urgency}
+            daysLeft={job.days_left}
+            deadline={job.deadline}
+          />
         </div>
 
         {job.match_reason && (

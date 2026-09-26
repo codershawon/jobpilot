@@ -9,6 +9,7 @@ import {
 } from "react-icons/bs";
 import Logo from "./Logo";
 import Container from "./Container";
+import Link from "next/link";
 
 interface HeaderProps {
   loading: boolean;
@@ -69,6 +70,12 @@ export default function Header({
                 <BsArrowRepeat className={`w-3.5 h-3.5 text-cyan-400 ${refreshing ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} />
                 <span className="hidden sm:inline">{refreshing ? "Syncing..." : "Sync Jobs"}</span>
               </button>
+              <Link
+                  href="/tracker"
+                  className="flex items-center gap-1.5 rounded-xl border border-cyan-950 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 transition hover:border-cyan-800 hover:text-slate-100"
+                >
+                  Tracker
+                </Link>
 
               <button
                 onClick={() => fileInputRef.current?.click()}
