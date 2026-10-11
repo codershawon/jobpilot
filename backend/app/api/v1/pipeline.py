@@ -28,8 +28,6 @@ from app.models import (
 from app.services.cv_parser import parse_cv
 from app.services.job_fetcher import aggregate_all_jobs, aggregate_jobs_by_profile
 from app.services.job_store import query_jobs
-from app.core.database import get_db
-from app.services.job_store import query_jobs
 from app.services.matcher import match_and_score_jobs, process_matching_pipeline
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline & Jobs"])
@@ -68,7 +66,7 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
 
     districts = [d for d in payload.districts if d and d != "All"]
 
-    if not payload.live:
+        if not payload.live:
         db_jobs = await query_jobs(
             db,
             sectors=payload.sectors or None,
@@ -78,7 +76,19 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
             hide_expired=payload.hide_expired,
             limit=500,
         )
+        # DB path এতদিন keywords উপেক্ষা করত — এখন সম্মান করবে
+        if db_jobs and payload.keywords:
+            kws = [k.lower() for k in payload.keywords if k]
+            db_jobs = [
+                j for j in db_jobs
+                if any(
+                    k in f"{j.title} {j.company} {' '.join(j.tags or [])} {j.description or ''}".lower()
+                    for k in kws
+                )
+            ]
         if db_jobs:
+            if payload.sort_by == "deadline":
+                db_jobs.sort(key=lambda j: j.days_left if j.days_left is not None else 9999)
             return JobSearchResponse(total_found=len(db_jobs), jobs=db_jobs)
 
     jobs = await aggregate_all_jobs(
@@ -98,14 +108,6 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
     # কাজের ক্ষেত্র ফিল্টার
     if payload.job_function and payload.job_function != "ALL":
         jobs = [j for j in jobs if j.job_function == payload.job_function]
-
-    # মেয়াদ শেষ হওয়া সার্কুলার দেখিয়ে লাভ নেই
-    if payload.hide_expired:
-        jobs = [j for j in jobs if j.urgency != "expired"]
-
-    if payload.sort_by == "deadline":
-        # তারিখ নেই এমনগুলো সবার শেষে
-        jobs.sort(key=lambda j: j.days_left if j.days_left is not None else 9999)
 
     # মেয়াদ শেষ হওয়া সার্কুলার দেখিয়ে লাভ নেই
     if payload.hide_expired:

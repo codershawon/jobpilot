@@ -54,12 +54,12 @@ async def fetch_bdjobs_unlimited(keywords: List[str], target_district: str = "Dh
                 job_type="Remote" if is_rem else "Local",
                 source="BDJOBS",                     
                 url=r["url"],
-                description=r.get("description", f"Verified opening for {r.get('title')} at {r.get('company')}."),
+                description=r.get("description", f"Opening for {r.get('title')} at {r.get('company')}."),
                 salary=r.get("salary", "Negotiable"),
                 tags=r.get("tags", ["Bdjobs", "Live"]), 
                 posted_date=r.get("deadline", "Recent"),
-                match_score=85,
-                match_reason="Matched from BDJobs circular",
+                match_score=0,
+                match_reason="",
                 cover_letter="",
                 status="SAVED"
             )
@@ -105,8 +105,8 @@ async def fetch_govt_jobs_live(keywords=None, target_district="Dhaka"):
                 salary=r.get("salary") or "জাতীয় বেতন স্কেল",
                 tags=r.get("tags", ["Govt"]),
                 posted_date=r.get("published_date") or "সাম্প্রতিক",
-                match_score=85,
-                match_reason="Government recruitment circular",
+                match_score=0,
+                match_reason="",
                 cover_letter="",
                 status="SAVED",
             )
@@ -295,7 +295,7 @@ async def aggregate_all_jobs(
     only_gov: bool = False, 
     limit_per_source: int = None
 ) -> List[JobItem]:
-    dist = districts[0] if districts and len(districts) > 0 and districts[0] != "All" else "Cumilla"
+    dist = districts[0] if districts and len(districts) > 0 and districts[0] != "All" else "Dhaka"
     # ── ক্যাশ চেক ──
     ckey = job_cache_key(keywords, districts, include_gov, only_gov)
     cached = await get_json(ckey)
@@ -319,7 +319,7 @@ async def aggregate_all_jobs(
         ("remotive", fetch_remotive_unlimited(search_keywords)),
         ("arbeitnow", fetch_arbeitnow_unlimited(search_keywords)),
         ("remoteok", fetch_remoteok_unlimited(search_keywords)),
-        ("linkedin", fetch_linkedin_unlimited(search_keywords)),
+        # ("linkedin", fetch_linkedin_unlimited(search_keywords)),
         ("weworkremotely", fetch_weworkremotely(search_keywords)),
         ("himalayas", fetch_himalayas(search_keywords)),
         # ReliefWeb: অনুমোদিত appname দরকার — https://apidoc.reliefweb.int/
@@ -364,7 +364,7 @@ async def aggregate_all_jobs(
 
 async def aggregate_jobs_by_profile(
     keywords: List[str],
-    user_district: str = "Cumilla",
+    user_district: str = "Dhaka",
     limit_per_source: int = None
 ) -> List[JobItem]:
     return await aggregate_all_jobs(
