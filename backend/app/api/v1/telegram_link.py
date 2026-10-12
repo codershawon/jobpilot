@@ -15,22 +15,30 @@ from app.db.models import User
 
 router = APIRouter(prefix="/telegram", tags=["Telegram"])
 
-TG_API = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}"
 _bot_username: str | None = None
+
+
+def _tg_api() -> str:
+    if not settings.TELEGRAM_BOT_TOKEN:
+        raise HTTPException(status_code=503, detail="Telegram bot is not configured")
+    return f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}"
 
 
 async def _bot_name() -> str:
     global _bot_username
     if not _bot_username:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(f"{TG_API}/getMe")
-            _bot_username = r.json()["result"]["username"]
+            r = await c.get(f"{_tg_api()}/getMe")
+            data = r.json()
+            if not data.get("ok"):
+                raise HTTPException(status_code=502, detail="Telegram getMe failed")
+            _bot_username = data["result"]["username"]
     return _bot_username
 
 
 async def _send(chat_id, text: str) -> None:
     async with httpx.AsyncClient(timeout=10) as c:
-        await c.post(f"{TG_API}/sendMessage", json={"chat_id": chat_id, "text": text})
+        await c.post(f"{_tg_api()}/sendMessage", json={"chat_id": chat_id, "text": text})
 
 
 @router.post("/link-code")
