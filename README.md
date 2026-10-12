@@ -1,4 +1,4 @@
-<h1 align="center">🧭 JobPilot AI</h1>
+<h1 align="center">JobPilot AI</h1>
 <p align="center"><b>AI-powered job search copilot for Bangladesh</b> — upload your CV once, get matched circulars from BDjobs & government portals, and generate tailored cover letters in one click.</p>
 
 <p align="center">
@@ -171,3 +171,4 @@ JobPilot links out to LinkedIn and Facebook with smart search URLs — it delibe
 ## 📄 License
 
 MIT © [Shawon Barua](https://shawonbarua.me) · [LinkedIn](https://www.linkedin.com/in/dev-shawon) · [GitHub](https://github.com/codershawon)
+
