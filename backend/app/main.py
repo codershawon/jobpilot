@@ -81,8 +81,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # ── রাউটার ──
 from app.api.v1.pipeline import router as pipeline_router  # noqa: E402
+from app.api.v1.telegram_link import router as telegram_router  # noqa: E402
 
 app.include_router(pipeline_router, prefix="/api")
+app.include_router(telegram_router, prefix="/api")
 
 try:
     from app.api.v1.districts import router as district_router

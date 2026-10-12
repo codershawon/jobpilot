@@ -1,12 +1,4 @@
-"""
-পাইপলাইন এন্ডপয়েন্ট।
-
-সিকিউরিটি পরিবর্তন:
-  - /run, /search, /match তিনটাতেই রেট লিমিট
-  - /run-এ ফাইল যাচাই (সাইজ, টাইপ, magic bytes)
-  - /saved, /save-এ আসল JWT যাচাই
-  - /search এখন Pydantic model ব্যবহার করে, হাতে হাতে request.json() পার্স নয়
-"""
+"""পাইপলাইন এন্ডপয়েন্ট।"""
 
 from typing import List, Optional
 
@@ -33,17 +25,14 @@ from app.services.matcher import match_and_score_jobs, process_matching_pipeline
 router = APIRouter(prefix="/pipeline", tags=["Pipeline & Jobs"])
 
 
-# ──────────────────────────────────────────────────────────
-# রিকোয়েস্ট মডেল — validation বিনামূল্যে পাওয়া যায়
-# ──────────────────────────────────────────────────────────
 class SearchRequest(BaseModel):
     keywords: List[str] = Field(default_factory=list, max_length=10)
     districts: List[str] = Field(default_factory=list, max_length=10)
     sectors: List[str] = Field(default_factory=list, max_length=8)
     job_function: Optional[str] = None
     hide_expired: bool = True
-    sort_by: str = "relevance"      # relevance | deadline
-    live: bool = False              # true হলে লাইভ স্ক্র্যাপ
+    sort_by: str = "relevance"
+    live: bool = False
     include_remote: bool = True
     include_gov: bool = True
     source: Optional[str] = None
@@ -66,7 +55,7 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
 
     districts = [d for d in payload.districts if d and d != "All"]
 
-        if not payload.live:
+    if not payload.live:
         db_jobs = await query_jobs(
             db,
             sectors=payload.sectors or None,
@@ -114,7 +103,6 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
         jobs = [j for j in jobs if j.urgency != "expired"]
 
     if payload.sort_by == "deadline":
-        # তারিখ নেই এমনগুলো সবার শেষে
         jobs.sort(key=lambda j: j.days_left if j.days_left is not None else 9999)
 
     return JobSearchResponse(total_found=len(jobs), jobs=jobs)
@@ -129,7 +117,6 @@ async def search_jobs(payload: SearchRequest, db: AsyncSession = Depends(get_db)
     dependencies=[Depends(RateLimiter("match", limit=20, window_seconds=3600))],
 )
 async def match_jobs_endpoint(payload: JobMatchRequest):
-    # একবারে অগুনতি জব পাঠিয়ে কোটা শেষ করা ঠেকাতে
     jobs = payload.jobs[:300]
 
     matched = await match_and_score_jobs(
@@ -153,10 +140,9 @@ async def run_full_pipeline(
     file: UploadFile = File(...),
     user_id: str | None = Depends(get_optional_user),
 ):
-    # রেট লিমিটার যেন IP নয়, ইউজার ধরে হিসাব করে
     request.state.user_id = user_id
 
-    contents = await read_validated_cv(file)     # সাইজ + টাইপ + magic bytes
+    contents = await read_validated_cv(file)
 
     cv_res = await parse_cv(contents, file.filename or "resume.pdf")
     profile = cv_res.profile
@@ -214,7 +200,6 @@ async def save_pipeline_state(
     )
     profile = res.scalar_one_or_none()
 
-    # অতিরিক্ত বড় payload আটকাতে
     data = payload.model_dump()
     data["matched_jobs"] = data.get("matched_jobs", [])[:300]
 

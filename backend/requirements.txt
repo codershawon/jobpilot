@@ -6,6 +6,8 @@ pydantic>=2.10.0
 pydantic-settings>=2.6.0
 python-dotenv>=1.0.1
 redis>=5.0.0
+psycopg[binary]
+
 
 # ── LLM ──
 litellm>=1.55.0

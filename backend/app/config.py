@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_TEST_CHAT_ID: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str | None = None
     GITHUB_API_KEY: str = ""
 
     # ──────────────── Model tiers ────────────────
